@@ -46,11 +46,10 @@
 15.... WLA Flags
 16.... Extra compile time definitions
 17.... Good things to know about WLA
-18.... Author
-19.... Thanks
-20.... Future
-21.... Support
-22.... Legal Note
+18.... WLA DX's architectural overview
+ 18.1. WLA
+ 18.2. WLALINK
+19.... Legal Note
 
 
 ------------------------------------------------------------------------------
@@ -58,7 +57,9 @@
 ------------------------------------------------------------------------------
 
 
-I wrote this because I had never written an assembler before and I really
+The history behind WLA DX, from the original author, Ville Helin:
+
+"I wrote this because I had never written an assembler before and I really
 needed a macro assembler which could compile the GB-Z80 code I wrote. ;)
 Gaelan Griffin needed real Z80 support for his SMS projects so I thought
 I could write WLA to be a little more open and nowadays it supports all
@@ -69,12 +70,20 @@ share of WLA as well. After finishing that few people said they'd like 65816
 support (they had SNES developing in mind) so I added support for that. And
 then I thought I should write a 6510 version of WLA as well...
 
-Almost all rules that apply to Z80 compiling apply also to 6502, 65C02, 6510,
-65816, HUC6280 and SPC-700.
-
 This is my ideal GB-Z80 macro assembler (not in final form, not yet). ;)
 Tastes differ. Thus WLA! Notice that WLA was initially made for Game Boy
-developers so the GB-Z80 version and the rest differ a little.
+developers so the GB-Z80 version and the rest differ a little."
+
+Good to know about WLA DX:
+
+Almost all rules that apply to Z80 source code processing with WLA DX
+apply also to 6502, 65C02, 6510, 65816, HUC6280 and SPC-700.
+
+About the names: WLA DX means all the tools covered in this documentation.
+So WLA DX includes WLA GB-Z80/Z80/6502/65C02/6510/65816/HUC6280/SPC-700
+macro assembler (what a horribly long name), WLAB, WLAD and WLALINK
+GB-Z80/Z80/6502/65C02/6510/65816/HUC6280/SPC-700 linker. We use plain WLA
+to refer to the macro assembler in this README.
 
 Currently WLA can also be used as a patch tool. Just include the original
 ROM image into the project with .BACKGROUND and insert e.g., OVERWRITE .SECTIONs
@@ -84,16 +93,8 @@ you have it. 100% readable (asm coded) patches are reality!
 Note that you can directly compile only object and library files. You must
 use WLALINK to link these (or only one, if you must) into a ROM/program file.
 
-About the names... WLA DX means all the tools covered in this documentation.
-So WLA DX includes WLA GB-Z80/Z80/6502/65C02/6510/65816/HUC6280/SPC-700
-macro assembler (what a horribly long name), WLAB, WLAD and WLALINK
-GB-Z80/Z80/6502/65C02/6510/65816/HUC6280/SPC-700 linker. I use plain WLA to refer
-to the macro assembler.
-
-WLA DX's homepage: http://www.iki.fi/~vhelin/wla.html
-
-And if you happen to write something cool using WLA DX, please let me know,
-I want to see it!
+WLA DX's old homepage: http://www.iki.fi/~vhelin/wla.html
+WLA DX's new homepage: https://github.com/vhelin/wla-dx
 
 
 ------------------------------------------------------------------------------
@@ -138,6 +139,7 @@ Group 2:
 [GB ] .DESTINATIONCODE 1
 [GB ] .NINTENDOLOGO
 [GB ] .GBHEADER
+[Z80] .SMSHEADER
 [GB ] .COMPUTEGBCOMPLEMENTCHECK
 [ALL] .EMPTYFILL $C9
 [658] .ENDEMUVECTOR
@@ -154,6 +156,7 @@ Group 2:
 [GB ] .RAMSIZE 0
 [GB ] .ROMDMG
 [GB ] .ROMGBC
+[GB ] .ROMGBCONLY
 [GB ] .ROMSGB
 [658] .SLOWROM
 [658] .SMC
@@ -549,9 +552,9 @@ Indicates the country code located at $14A of a Gameboy ROM.
 
 This is not a compulsory directive.
 
---------------
+------------------
 .DESTINATIONCODE 1
---------------
+------------------
 
 .DESTINATIONCODE is an alias for .COUNTRYCODE.
 
@@ -570,16 +573,44 @@ This is not a compulsory directive.
 ---------
 
 This begins the GB header definition, and automatically defines
-.COMPUTEGBCHECKSUM. From here you may define any of the following:
+.COMPUTEGBCHECKSUM. End the header definition with .ENDGB. Here's an example:
 
-NAME "TANKBOMBPANIC" - identical to a freestanding .NAME.
-LICENSEECODEOLD $34  - identical to a freestanding .LICENSEECODEOLD.
-LICENSEECODENEW "HI" - identical to a freestanding .LICENSEECODENEW.
-CARTRIDGETYPE $00    - identical to a freestanding .CARTRIDGETYPE.
-RAMSIZE $09          - identical to a freestanding .RAMSIZE.
-COUNTRYCODE $01      - identical to a freestanding .COUNTRYCODE.
-DESTINATIONCODE $01  - identical to a freestanding .DESTINATIONCODE.
-NINTENDOLOGO         - identical to a freestanding .NINTENDOLOGO.
+.GBHEADER
+        NAME "TANKBOMBPANIC"  ; identical to a freestanding .NAME.
+        LICENSEECODEOLD $34   ; identical to a freestanding .LICENSEECODEOLD.
+        LICENSEECODENEW "HI"  ; identical to a freestanding .LICENSEECODENEW.
+        CARTRIDGETYPE $00     ; identical to a freestanding .CARTRIDGETYPE.
+        RAMSIZE $09           ; identical to a freestanding .RAMSIZE.
+        COUNTRYCODE $01       ; identical to a freestanding .COUNTRYCODE.
+        DESTINATIONCODE $01   ; identical to a freestanding .DESTINATIONCODE.
+        NINTENDOLOGO          ; identical to a freestanding .NINTENDOLOGO.
+	ROMDMG                ; identical to a freestanding .ROMDMG. Alternatively
+	                      ; ROMGBC or ROMGBCONLY can be used
+.ENDGB
+
+This is not a compulsory directive.
+
+----------
+.SMSHEADER
+----------
+
+.SMSHEADER
+        PRODUCTCODE 26, 70, 2 ; 2.5 bytes
+	VERSION 1             ; 0-15
+	REGIONCODE 4          ; 3-7
+	RESERVEDSPACE 0, 0    ; 2 bytes
+.ENDSMS
+
+The REGIONCODE also defines the system:
+ 3 - SMS Japan
+ 4 - SMS Export
+ 5 - GG Japan
+ 6 - GG Export
+ 7 - GG International
+
+When .SMSHEADER is defined, also the checksum is calculated, and TMR SEGA, two reserved
+bytes and ROM size are defined. See http://www.smspower.org/Development/ROMHeader
+for more information about SMS header.
 
 This is not a compulsory directive.
 
@@ -1453,6 +1484,10 @@ By default all defines are local to the file where they are
 presented. If you want to make the definition visible to all the
 files in the project, use .EXPORT.
 
+WARNING: Please declare your definition lexically before using it as otherwise the assembler
+might make incorrect assumptions about its value and size and choose e.g. wrong opcodes and
+generate binary that doesn't run properly.
+
 Here are some examples:
 
 .DEFINE X 1000
@@ -2203,7 +2238,8 @@ Here's an example of an ordinary section:
 This tells WLA that a FREE section called "Init" must be located somewhere
 in bank 0. If you replace FREE with SEMIFREE the section will be inserted
 somewhere in the bank 0, but not in the $0-$14F area. If you replace FREE
-with SUPERFREE the section will be inserted somewhere in the 
+with SUPERFREE the section will be inserted somewhere in any bank with the
+same size as bank 0.
 
 Here's the order in which WLA writes the sections:
 1. FORCE
@@ -2218,6 +2254,16 @@ last.
 
 You can also create a RAM section. For more information about them, please
 read the .RAMSECTION directive explanation.
+
+It is also possible to merge two or more sections using APPENDTO:
+
+.SECTION "Base"
+.DB 0
+.ENDS
+
+.SECTION "AppendToBase" FREE RETURNORG APPENDTO "Base"
+.DB 1
+.ENDS
 
 This is not a compulsory directive.
 
@@ -2298,8 +2344,19 @@ required to terminate it.
 .ROMGBC
 -------
 
+Inserts data into the specific ROM location to mark the ROM as a dual-mode ROM
+($80 -> $0143, so ROM name is max. 15 characters long). It will run in either
+DMG or GBC mode.
+
+This is not a compulsory directive.
+
+-----------
+.ROMGBCONLY
+-----------
+
 Inserts data into the specific ROM location to mark the ROM as a Gameboy Color
-ROM ($C0 -> $0143, so ROM name is max. 15 characters long).
+ROM ($C0 -> $0143, so ROM name is max. 15 characters long). It will only run in
+GBC mode.
 
 This is not a compulsory directive.
 
@@ -2308,7 +2365,7 @@ This is not a compulsory directive.
 -------
 
 Inserts data into the specific ROM location to mark the ROM as a DMG
-(Gameboy) ROM ($00 -> $0146).
+(Gameboy) ROM ($00 -> $0146). It will only run in DMG mode.
 
 This is not a compulsory directive. .ROMDMG cannot be used with .ROMSGB.
 
@@ -2370,7 +2427,7 @@ This is not a compulsory directive.
 
 Changes the name of the output file. Here's and example:
 
-wla-gb -o test.s
+wla-gb -o test.o test.s
 
 would normally output "test.o", but if you had written
 
@@ -2550,6 +2607,25 @@ VBI_IRQ2
 _VBI_LOOP:
 main:
 
+Labels starting with "@" are considered to be child labels. They can only be
+referenced within the scope of their parent labels, unless the full name is
+specified. When there is more than one "@", the label is considered to be
+a child of a child.
+
+Here are some examples of child labels:
+
+PARENT1:
+@CHILD:
+@@SUBCHILD
+
+PARENT2:
+@CHILD:
+
+This is legal, since each of the @CHILD labels has a different parent. You can
+specify a parent to be explicit, like so:
+
+        jr PARENT1@CHILD@SUBCHILD
+
 Note that when you place ':' in front of the label string when referring to
 it, you'll get the bank number of the label, instead of the label's address.
 Here's an example:
@@ -2639,6 +2715,15 @@ calculations and sees only the preprocessed output of WLA):
                 ; to # as it's closest to me in the output WLA produces
                 ; for WLALINK (so it's better to use \@ with labels inside
                 ; a macro).
+
+WLALINK will also generate _sizeof_[label] defines that measure the distance
+between two consecutive labels. Here is an example:
+
+Label1:
+   .db 1, 2, 3, 4
+Label2:
+
+In this case you'll get a definition _sizeof_Label1 that will have value 4.
 
 
 3.4. Number Types
@@ -2786,9 +2871,8 @@ $FF - Hudson HuC-1
 ------------------------------------------------------------------------------
 
 
-If you find bugs, please let me know asap. Anything, small or big, send
-me email! I won't eat you for reporting a bug. Probably your name just ends
-up in the thanks-section of this documentation. ;)
+If you find bugs, please let us know about them via GitHub:
+https://github.com/vhelin/wla-dx/issues
 
 
 ------------------------------------------------------------------------------
@@ -2798,14 +2882,14 @@ up in the thanks-section of this documentation. ;)
 
 7.1. 'examples'
 
-The main purpose of the files in the 'examples' directory is to teach people
-few things about WLA. If you feel a little uncertain with the syntax check
-out this place. But beware! The code is ugly and doesn't do anything meaningful.
+The main purpose of the files in the 'examples' directory is to test that WLA
+and WLALINK can assemble and link the tiny project correctly. You can also
+take a look at the code and syntax in the files, but beware: if you run the
+rom files you probably don't see anything on screen.
 
-'examples' directory holds eight directories, 'gb-z80', 'z80', '6502', '65c02',
-'6510', '65816', 'huc6280' and 'spc-700'. 'include' directory under 'gb-z80'
-could be very useful as the six include files there have all the Game Boy
-hardware register address and memory definitions you could ever need and more.
+'include' directory under 'gb-z80' could be very useful as the six include
+files there have all the Game Boy hardware register address and memory
+definitions you could ever need and more.
 
 
 7.2. 'examples/gb-z80/lib'
@@ -2847,9 +2931,7 @@ of no further use.
 
 9.1. Compiling Object Files
 
-To compile an object file use:
-
-"wla -[itvx]o [INCDIR] [DEFINITIONS] <ASM FILE> [OUTPUT FILE]"
+To compile an object file use the -o [OUT] option on the command line.
 
 These object files can be linked together (or with library files) later
 with "wlalink".
@@ -2872,26 +2954,26 @@ file "txt/wla_file_formats.txt" which is included in the release archive.
 
 Here are some examples of definitions:
 
--DIEXIST
--DDAY=10
--DBASE=$10
--DNAME=elvis
+-D IEXIST
+-D DAY=10
+-D BASE = $10
+-D NAME=elvis
 
 And here's an WLA example creating definitions on the command line:
 
-wla-gb -o -DDEBUG -DVERBOSE=5 -DNAME="math v1.0" math.s
+wla-gb -D DEBUG -D VERBOSE=5 -D NAME = "math v1.0" -o math.o math.s
 
 DEBUG's value will be 0, VERBOSE's 5 and NAME is a string definition
 with value "math v1.0".
+Note that -D always needs a space after it, but the rest of the statement
+can be optionally stuck inside one word.
 
 
 9.2. Compiling Library Files
 
-To compile a library file use:
- 
-"wla -[itvx]l [INCDIR] [DEFINITIONS] <ASM FILE> [OUTPUT FILE]"
+To compile a library file use the -l [OUT] option on the command line.
 
-Name object files so that they can be recognized as library files. Normal
+Name these files so that they can be recognized as library files. Normal
 suffix is ".lib" (WLA default).
 
 With library files you can reduce the amount of compiling. Library files
@@ -2909,9 +2991,9 @@ After you have produced one or more object files and perhaps some library
 files, you might want to link them together to produce a ROM image / program
 file. "wlalink" is the program you use for that. Here's how you use it:
 
-"wlalink [-divsS]{b/r} [LIBDIR] <LINK FILE> <OUTPUT FILE>"
+"wlalink [OPTIONS] <LINK FILE> <OUTPUT FILE>"
 
-Choose 'b' for program file or 'r' for ROM image linking.
+Choose the option -b [OUT] for program file or -r [OUT] for ROM image linking.
 
 Link file is a text file that contains information about the files you want
 to link together. Here's the format:
@@ -3038,8 +3120,8 @@ same memory address (in the program's point of view).
 Examples:
 
 [seravy@localhost tbp]# wlalink -r linkfile testa.sfc
-[seravy@localhost tbp]# wlalink -dib linkfile testb.sfc
-[seravy@localhost tbp]# wlalink -vS -L../../lib linkfile testc.sfc
+[seravy@localhost tbp]# wlalink -d -i -b linkfile testb.sfc
+[seravy@localhost tbp]# wlalink -v -S -L ../../lib linkfile testc.sfc
 
 
 ------------------------------------------------------------------------------
@@ -3091,6 +3173,9 @@ WLA computes internally with real numbers so (5/2)*2 produces 5, not 4.
 12... Disassembling
 ------------------------------------------------------------------------------
 
+
+WARNING: WLAD is not being maintained any longer, and no plans regarding it
+have been made.
 
 WLAD is a disassembler that can be used to disassemble an existing GB-ROM image
 into a WLA-syntax compatible source file. It won't produce very readable
@@ -3383,11 +3468,11 @@ I - Directory to include files.
 
 Examples:
 
-[seravy@localhost tbp]# wla -voi testa.s
-[seravy@localhost tbp]# wla -oM testa.s
-[seravy@localhost tbp]# wla -l testb.s testb.lib
-[seravy@localhost tbp]# wla -l -I../../include testb.s testb.lib
-[seravy@localhost tbp]# wla -oM -Imyfiles testa.s
+[seravy@localhost tbp]# wla -v -i -o testa.o testa.s
+[seravy@localhost tbp]# wla -M -o testa.o testa.s
+[seravy@localhost tbp]# wla -l testb.lib testb.s
+[seravy@localhost tbp]# wla -I ../../include -l testb.lib testb.s
+[seravy@localhost tbp]# wla -M -I myfiles -l testa.lib testa.s
 
 Note that the first example produces file named "testa.o".
 
@@ -3448,97 +3533,71 @@ Note that you'll also get all these definitions in lower case
 
 
 ------------------------------------------------------------------------------
-18... Author
+18... WLA DX's architectural overview
 ------------------------------------------------------------------------------
 
 
-Ville Helin, the author of Wzonka-Lad, a Game Boy emulator for the Amiga
-machines, among other things. I work at Rovio Mobile Ltd.
-(http://www.rovio.com) as a senior game programmer. I like Nintendo
-(goes without saying), anime soap operas, gym and hardcore video gaming.
-
-email: vhelin#iki.fi
-hpage: http://www.iki.fi/~vhelin
-smail: Ville Helin
-       Agricolankatu 7 C 79
-       00530 Helsinki
-       Finland
+The two most important executables inside WLA DX are WLA (the assembler) and
+WLALINK (the linker).
 
 
-------------------------------------------------------------------------------
-19... Thanks
-------------------------------------------------------------------------------
+18.1. WLA
+
+WLA has four separate phases, called a little bit incorrectly passes:
+
+1. pass_1.c: pass_1():
+   - The biggest data processor in WLA.
+   - Includes the include files: every time time happens the file is read in,
+     white space is removed, lines formatted, etc.
+   - Macros are processed along with directives
+   - All textual data, code, etc. are transformed into WLA's internal byte
+     code that gets written into a tmp (TMP) file, and after this phase
+     the assembler or the linker has no idea of target CPU's opcodes - all is
+     just pure WLA byte code.
+   - The first and the only pass that handles the assembly source files
+     supplied by the user.
+   - The parser in this pass starts from the first byte of the first source
+     file, then moves forward parsing everything that it encounters, but
+     when a macro is called, the parser jumps to the beginning of the macro,
+     and continues parsing from there.
+2. pass_2.c: pass_2():
+   - If the user has issued directives like .SDSCTAG, here we generate the
+     needed data and write that into TMP.
+3. pass_3.c: pass_3():
+   - Here we read in TMP and do some sanity checks for the data, give labels
+     addresses (if possible), generate internal structures for labels and
+     sections.
+4. pass_4.c: pass_4():
+   - Again we read in TMP.
+   - Now we check that if there is a reference to a calculation, and that
+     calculation has been succesfully calculated, then we can replace the
+     reference with the result.
+   - This phase writes out object and library files, i.e., transforms TMP
+     to final output files (this write out could actually be pass_5)...
 
 
-- Maxim for the bug reports, feature suggestions, and win32 binaries. If
-  there were more people like Maxim, WLA DX would be much better than what
-  it is today. ;)
-- Gaelan Griffin for endless suggestions and fast bug reports!
-  Take one feature from WLA and you have a 30% propability that Gaelan
-  bugged me to implement it. ;)
-- Aleksi Eeben for lots of good bug reports and feature ideas!
-- Nicolas Warren for few some serious bug reports (and even
-  fixes to them!) and for the good ideas!
-- Madonna MkII (Matra Computer Corp.), Mike Blum, Anders Montonen,
-  Robert Kihl, Martin Konrad, Arto Salmi, Yoshiaki Ishida
-  Brad Jorsch and Michel Iwaniec for reporting bugs in WLA
-  and providing me with great ideas.
-- Mark Knox, Igor Wronsky and Anders Montonen for helping me with
-  the MSDOS port!
-- Gaelan Griffin for the Amiga port and valuable SPC-700 information!
-- Ventzislav Tzvetkov for the AmigaOS4 makefiles.
-- FluBBa for crucial HuC6280 bug reports!
-- Christophe Iasci for the Win32 port!
-- Marc Dünster and Kevin Mantey for the big help and suggestions with
-  wla-65816 and wla-spc700!
-- Tobias Pflug for bug reports, and fixing SMC header writing!
-- John Schneider for makefile enhancements!
-- Daniël Hörchner for fixing the Win32 makefiles!
-- Timo Jantunen for helping me with makefiles.
-- Adam Klotblix for documentation improvements and bug reports.
-- Zachary Keene for writing .SNESHEADER, .ENDSNES, .SNESNATIVEVECTOR,
-  .ENDNATIVEVECTOR, .SNESEMUVECTOR and .ENDEMUVECTOR. I want more
-  people like him! ;)
-- Matthew Stewart for implementing namespaces and speeding up WLA with
-  hashmaps.
-- People at gameboy@vip.co.za, gameboydev@listbot.com,
-  gbadev@yahoogroups.com and s8-dev for keeping up the good work! ;)
+18.2. WLALINK
+
+WLALINK is much simpler and more straight forward than WLA; WLALINK just reads
+in all the objects and library files, checks that target platforms for the
+files match, places the sections along with labels into the target memory
+map, solves pending calculations, calculates checksums, and writes out the
+final ROM/PRG files. 'wlalink/main.c:main()' should quite clearly display
+all the higher level phases in the linking process.
 
 
 ------------------------------------------------------------------------------
-20... Future
+19... Legal Note
 ------------------------------------------------------------------------------
 
 
-Future enhancements (if I get _really_ inspired):
+WLA DX (the whole package) was originally written by Ville Helin in 1998-2008.
+After that everybody has been able to take part in the development of WLA DX,
+and recently via GitHub. The authors are not responsible for anything the
+software does.
 
-- Listfiles.
-- Much more features to WLAD (I already know of three) and
-  Z80/6502/65C02/6510/65816/HUC6280/SPC-700 support.
-- Other optimizations, bug fixes and new features.
-- You tell me.
-
-
-------------------------------------------------------------------------------
-21... Support
-------------------------------------------------------------------------------
-
-
-The currently supported systems are MSDOS/x86, Win32/x86, AmigaOS/680x0,
-AmigaOS4/PPC and Unix/xyz. If you'd like to see WLA for other
-platforms/configurations, send me email and we'll see what I can do about it
-(if compiling WLA DX binaries from the source release archive doesn't work
-for some reason).
-
-
-------------------------------------------------------------------------------
-22... Legal Note
-------------------------------------------------------------------------------
-
-
-WLA DX (the whole package) was written by Ville Helin, except for those
-parts mentioned in section 19, in 1998-2008. WLA DX is GPL software. For
-more information about GPL, take a look at the LICENCE file.
+WLA DX is GPL software. For more information about GPL, take a look at the
+LICENCE file.
 
 Game Boy and Game Boy Color are copyrighted by Nintendo.
 

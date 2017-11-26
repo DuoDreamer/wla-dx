@@ -79,6 +79,7 @@ cd ..
 #####################################################################
 
 changePlatform gb-z80
+runTest appendto_test
 runTest background_test
 runTest linker_test
 runTest namespace_test
@@ -113,5 +114,6 @@ runTest linker_test_2
 runTest rept_test
 runTest sdsc_test
 runTest sms_test
+runTest smsheader_test
 runTest ram_sections
 cd ..

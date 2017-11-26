@@ -33,6 +33,7 @@ char sdsctag_name_str[MAX_NAME_LENGTH], sdsctag_notes_str[MAX_NAME_LENGTH], sdsc
 int sdsctag_name_type, sdsctag_notes_type, sdsctag_author_type, sdsc_ma, sdsc_mi;
 int sdsctag_name_value, sdsctag_notes_value, sdsctag_author_value;
 int computesmschecksum_defined = 0, sdsctag_defined = 0, smstag_defined = 0;
+int smsheader_defined = 0, smsversion = 0, smsversion_defined = 0, smsregioncode = 0, smsregioncode_defined = 0, smsproductcode_defined = 0, smsproductcode1 = 0, smsproductcode2 = 0, smsproductcode3 = 0, smsreservedspace1 = 0, smsreservedspace2 = 0, smsreservedspace_defined = 0;
 #endif
 
 int org_defined = 1, background_defined = 0, background_size = 0;
@@ -101,6 +102,7 @@ struct slot slots[256];
 struct structure *structures_first = NULL;
 struct filepointer *filepointers = NULL;
 struct map_t *namespace_map = NULL;
+struct append_section *append_sections = NULL;
 
 extern char *buffer, *unfolded_buffer, label[MAX_NAME_LENGTH], *include_dir, *full_name;
 extern int size, unfolded_size, input_number_error_msg, verbose_mode, output_format, open_files;
@@ -163,6 +165,15 @@ __far /* put the following big table in the FAR data section */
 #include "opcodes_huc6280.c"
 #include "opcodes_huc6280_tables.c"
 #endif
+
+
+#define no_library_files(name)\
+ do {\
+ if (output_format == OUTPUT_LIBRARY) {\
+    print_error("Library files don't take " name ".\n", ERROR_DIR);\
+    return FAILED;\
+  }\
+ } while (0)
 
 
 int strcaselesscmp(char *s1, char *s2) {
@@ -428,7 +439,7 @@ int macro_insert_byte_db(char *name) {
   }
 
   if (d->type == DEFINITION_TYPE_VALUE) {
-    if (d->value < -127 || d->value > 255) {
+    if (d->value < -128 || d->value > 255) {
       sprintf(emsg, ".%s expects 8-bit data, %d is out of range!\n", name, (int)d->value);
       print_error(emsg, ERROR_DIR);
       return FAILED;
@@ -1084,10 +1095,8 @@ int parse_directive(void) {
   /* ORG */
 
   if (strcaselesscmp(cp, "ORG") == 0) {
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .ORG definitions.\n", ERROR_DIR);
-      return FAILED;
-    }
+    no_library_files(".ORG definitions");
+    
     if (bank_defined == 0) {
       print_error("No .BANK is defined.\n", ERROR_LOG);
       return FAILED;
@@ -1115,10 +1124,8 @@ int parse_directive(void) {
   /* ORGA */
 
   if (strcaselesscmp(cp, "ORGA") == 0) {
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .ORGA definitions.\n", ERROR_DIR);
-      return FAILED;
-    }
+    no_library_files(".ORGA definitions");
+    
     if (bank_defined == 0) {
       print_error("No .BANK is defined.\n", ERROR_LOG);
       return FAILED;
@@ -1154,10 +1161,8 @@ int parse_directive(void) {
   /* SLOT */
 
   if (strcaselesscmp(cp, "SLOT") == 0) {
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .SLOT definitions.\n", ERROR_DIR);
-      return FAILED;
-    }
+    no_library_files(".SLOT definitions");
+    
     if (section_status == ON) {
       print_error("You can't issue .SLOT inside a .SECTION.\n", ERROR_DIR);
       return FAILED;
@@ -1189,10 +1194,8 @@ int parse_directive(void) {
   /* BANK */
 
   if (strcaselesscmp(cp, "BANK") == 0) {
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .BANK definitions.\n", ERROR_DIR);
-      return FAILED;
-    }
+    no_library_files(".BANK definitions");
+    
     if (section_status == ON) {
       sprintf(emsg, "Section \"%s\" is open. Do not try to change the bank.\n", sections_last->name);
       print_error(emsg, ERROR_LOG);
@@ -1362,7 +1365,7 @@ int parse_directive(void) {
         continue;
       }
 
-      if (inz == SUCCEEDED && (d < -127 || d > 255)) {
+      if (inz == SUCCEEDED && (d < -128 || d > 255)) {
         sprintf(emsg, ".%s expects 8-bit data, %d is out of range!\n", bak, d);
         print_error(emsg, ERROR_DIR);
         return FAILED;
@@ -1563,6 +1566,7 @@ int parse_directive(void) {
 	  }
 	  else {
 	    int tmp_a = 0;
+	    
 	    /* handle '\<' */
 	    if (label[o] == '\\' && label[o + 1] == '<') {
 	      o += 2;
@@ -1783,7 +1787,7 @@ int parse_directive(void) {
       /* take care of the rest */
       else {
         if (it->size == 1) {
-          if ((inz == SUCCEEDED) && (d < -127 || d > 255)) {
+          if ((inz == SUCCEEDED) && (d < -128 || d > 255)) {
             sprintf(emsg, "\"%s.%s\" expects 8-bit data, %d is out of range!\n", s->name, it->name, d);
             print_error(emsg, ERROR_DIR);
             return FAILED;
@@ -1884,7 +1888,7 @@ int parse_directive(void) {
       return FAILED;
     }
 
-    if (q == SUCCEEDED && (d > 255 || d < -127)) {
+    if (q == SUCCEEDED && (d > 255 || d < -128)) {
       sprintf(emsg, ".%s expects 8-bit data, %d is out of range!\n", bak, d);
       print_error(emsg, ERROR_DIR);
       return FAILED;
@@ -2297,8 +2301,10 @@ int parse_directive(void) {
             return FAILED;
          }
       }
-      else if (tmp[0] == '.')
+      else if (tmp[0] == '.') {
+        si->size = 0;
         continue;
+      }
       else {
         sprintf(emsg, "Unexpected symbol \"%s\" in .STRUCT.\n", tmp);
         print_error(emsg, ERROR_DIR);
@@ -2642,10 +2648,8 @@ int parse_directive(void) {
     }
 
     if (strcmp(tmp, "BANKHEADER") == 0) {
-      if (output_format == OUTPUT_LIBRARY) {
-        print_error("Library files don't take bank header sections.\n", ERROR_DIR);
-        return FAILED;
-      }
+      no_library_files("bank header sections");
+      
       sec_next = sections_first;
       while (sec_next != NULL) {
         if (strcmp(sec_next->name, tmp) == 0 && sec_next->bank == bank) {
@@ -2810,6 +2814,30 @@ int parse_directive(void) {
         return FAILED;
 
       sec_tmp->advance_org = NO;
+    }
+
+    if (compare_next_token("APPENDTO", 8) == SUCCEEDED) {
+      struct append_section *append_tmp;
+	
+      if (skip_next_token() == FAILED)
+        return FAILED;
+
+      append_tmp = calloc(sizeof(struct append_section), 1);
+      if (append_tmp == NULL) {
+	sprintf(emsg, "Out of memory while allocating room for a new APPENDTO \"%s\".\n", tmp);
+	print_error(emsg, ERROR_DIR);
+	return FAILED;
+      }
+      
+      /* get the target section name */
+      if (get_next_token() == FAILED)
+	return FAILED;
+
+      strcpy(append_tmp->section, sec_tmp->name);
+      strcpy(append_tmp->append_to, tmp);
+
+      append_tmp->next = append_sections;
+      append_sections = append_tmp;
     }
 
     /* bankheader section? */
@@ -3439,10 +3467,7 @@ int parse_directive(void) {
   /* NINTENDOLOGO */
   
   if (strcaselesscmp(cp, "NINTENDOLOGO") == 0) {
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .NINTENDOLOGO.\n", ERROR_DIR);
-      return FAILED;
-    }
+    no_library_files(".NINTENDOLOGO");
 
     nintendologo_defined++;
 
@@ -3452,10 +3477,7 @@ int parse_directive(void) {
   /* NAME */
 
   if (strcaselesscmp(cp, "NAME") == 0) {
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .NAME.\n", ERROR_DIR);
-      return FAILED;
-    }
+    no_library_files(".NAME");
 
     if ((ind = get_next_token()) == FAILED)
       return FAILED;
@@ -3503,10 +3525,7 @@ int parse_directive(void) {
   /* NAME */
 
   if (strcaselesscmp(cp, "NAME") == 0) {
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .NAME.\n", ERROR_DIR);
-      return FAILED;
-    }
+    no_library_files(".NAME");
 
     if ((ind = get_next_token()) == FAILED)
       return FAILED;
@@ -3568,10 +3587,8 @@ int parse_directive(void) {
   /* ROMBANKS */
 
   if (strcaselesscmp(cp, "ROMBANKS") == 0) {
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .ROMBANKS.\n", ERROR_DIR);
-      return FAILED;
-    }
+    no_library_files(".ROMBANKS");
+    
     if (banksize_defined == 0) {
       print_error("No .ROMBANKSIZE defined.\n", ERROR_DIR);
       return FAILED;
@@ -3684,10 +3701,7 @@ int parse_directive(void) {
     int b = 0, a = 0, bt = 0, bt_defined = 0, x, bs = 0, bs_defined = 0;
 
 
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .ROMBANKMAP.\n", ERROR_DIR);
-      return FAILED;
-    }
+    no_library_files(".ROMBANKMAP");
 
     /* ROMBANKMAP has been defined previously */
     if (rombankmap_defined != 0 || rombanks_defined != 0) {
@@ -4179,8 +4193,7 @@ int parse_directive(void) {
     fseek(file_in_ptr, 0, SEEK_SET);
 
     if (max_address != background_size) {
-      sprintf(emsg, ".BACKGROUND file \"%s\" size (%d) and ROM size (%d) don't match.\n", full_name,
-          background_size, max_address);
+      sprintf(emsg, ".BACKGROUND file \"%s\" size (%d) and ROM size (%d) don't match.\n", full_name, background_size, max_address);
       print_error(emsg, ERROR_DIR);
       return FAILED;
     }
@@ -4199,10 +4212,7 @@ int parse_directive(void) {
 
   if (strcaselesscmp(cp, "RAMSIZE") == 0) {
 
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .RAMSIZE.\n", ERROR_DIR);
-      return FAILED;
-    }
+    no_library_files(".RAMSIZE");
 
     q = input_number();
 
@@ -4232,15 +4242,11 @@ int parse_directive(void) {
     return SUCCEEDED;
   }
 
-
   /* COUNTRYCODE */
 
   if (strcaselesscmp(cp, "COUNTRYCODE") == 0) {
 
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .COUNTRYCODE.\n", ERROR_DIR);
-      return FAILED;
-    }
+    no_library_files(".COUNTRYCODE");
 
     q = input_number();
 
@@ -4264,16 +4270,12 @@ int parse_directive(void) {
 
     return SUCCEEDED;
   }
-  
-  
+    
   /* DESTINATIONCODE */
 
   if (strcaselesscmp(cp, "DESTINATIONCODE") == 0) {
 
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .DESTINATIONCODE.\n", ERROR_DIR);
-      return FAILED;
-    }
+    no_library_files(".DESTINATIONCODE");
 
     q = input_number();
 
@@ -4297,17 +4299,12 @@ int parse_directive(void) {
 
     return SUCCEEDED;
   }
-  
-
 
   /* CARTRIDGETYPE */
 
   if (strcaselesscmp(cp, "CARTRIDGETYPE") == 0) {
 
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .CARTRIDGETYPE.\n", ERROR_DIR);
-      return FAILED;
-    }
+    no_library_files(".CARTRIDGETYPE");
 
     q = input_number();
 
@@ -4336,10 +4333,8 @@ int parse_directive(void) {
 
   if (strcaselesscmp(cp, "LICENSEECODENEW") == 0) {
 
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .LICENSEECODENEW.\n", ERROR_DIR);
-      return FAILED;
-    }
+    no_library_files(".LICENSEECODENEW");
+    
     if (licenseecodeold_defined != 0) {
       print_error(".LICENSEECODENEW and .LICENSEECODEOLD cannot both be defined.\n", ERROR_DIR);
       return FAILED;
@@ -4376,10 +4371,8 @@ int parse_directive(void) {
 
   if (strcaselesscmp(cp, "LICENSEECODEOLD") == 0) {
 
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .LICENSEECODEOLD.\n", ERROR_DIR);
-      return FAILED;
-    }
+    no_library_files(".LICENSEECODEOLD");
+    
     if (licenseecodenew_defined != 0) {
       print_error(".LICENSEECODENEW and .LICENSEECODEOLD cannot both be defined.\n", ERROR_DIR);
       return FAILED;
@@ -4389,7 +4382,7 @@ int parse_directive(void) {
 
     if (q == FAILED)
       return FAILED;
-    if (q != SUCCEEDED || d < -127 || d > 255) {
+    if (q != SUCCEEDED || d < -128 || d > 255) {
       sprintf(emsg, ".LICENSEECODEOLD needs a 8-bit value, got %d.\n", d);
       print_error(emsg, ERROR_DIR);
       return FAILED;
@@ -4418,12 +4411,12 @@ int parse_directive(void) {
     }
 
     if (computechecksum_defined != 0)
-      print_error(".COMPUTEGBCHECKSUM unnecessary when .GBHEADER is defined.\n", ERROR_WRN);
+      print_error(".COMPUTEGBCHECKSUM is unnecessary when .GBHEADER is defined.\n", ERROR_WRN);
     else
       computechecksum_defined++;
 
     if (computecomplementcheck_defined != 0)
-      print_error(".COMPUTEGBCOMPLEMENTCHECK unecessary when .GBHEADER is defined.\n", ERROR_WRN);
+      print_error(".COMPUTEGBCOMPLEMENTCHECK is unnecessary when .GBHEADER is defined.\n", ERROR_WRN);
     else
       computecomplementcheck_defined++;
 
@@ -4435,11 +4428,15 @@ int parse_directive(void) {
     while ((ind = get_next_token()) == SUCCEEDED) {
       if (strcaselesscmp(tmp, ".ENDGB") == 0)
         break;
-      else if (strcaselesscmp(cp, "NINTENDOLOGO") == 0)
+      else if (strcaselesscmp(tmp, "NINTENDOLOGO") == 0)
         nintendologo_defined++;
       else if (strcaselesscmp(tmp, "ROMDMG") == 0) {
-        if (romgbc != 0) {
+        if (romgbc == 1) {
 	  print_error(".ROMGBC was defined prior to .ROMDMG.\n", ERROR_DIR);
+          return FAILED;
+        }
+        else if (romgbc == 2) {
+	  print_error(".ROMGBCONLY was defined prior to .ROMDMG.\n", ERROR_DIR);
           return FAILED;
         }
         else if (romsgb != 0) {
@@ -4453,7 +4450,22 @@ int parse_directive(void) {
 	  print_error(".ROMDMG was defined prior to .ROMGBC.\n", ERROR_DIR);
           return FAILED;
         }
-        romgbc++;
+        else if (romgbc == 2) {
+	  print_error(".ROMGBCONLY was defined prior to .ROMGBC.\n", ERROR_DIR);
+          return FAILED;
+        }
+        romgbc = 1;
+      }
+      else if (strcaselesscmp(tmp, "ROMGBCONLY") == 0) {
+        if (romdmg != 0) {
+	  print_error(".ROMDMG was defined prior to .ROMGBCONLY.\n", ERROR_DIR);
+          return FAILED;
+        }
+        else if (romgbc == 1) {
+	  print_error(".ROMGBC was defined prior to .ROMGBCONLY.\n", ERROR_DIR);
+          return FAILED;
+        }
+        romgbc = 2;
       }
       else if (strcaselesscmp(tmp, "ROMSGB") == 0) {
         if (romdmg != 0) {
@@ -4511,7 +4523,7 @@ int parse_directive(void) {
 
         if (q == FAILED)
           return FAILED;
-        if (q != SUCCEEDED || d < -127 || d > 255) {
+        if (q != SUCCEEDED || d < -128 || d > 255) {
 	  sprintf(emsg, ".LICENSEECODEOLD needs a 8-bit value, got %d.\n", d);
 	  print_error(emsg, ERROR_DIR);
 	  return FAILED;
@@ -4551,10 +4563,10 @@ int parse_directive(void) {
             return FAILED;
           }
 
-        licenseecodenew_c1 = tmp[0];
-        licenseecodenew_c2 = tmp[1];
-        licenseecodenew_defined = 1;
-      }
+	  licenseecodenew_c1 = tmp[0];
+	  licenseecodenew_c2 = tmp[1];
+	  licenseecodenew_defined = 1;
+	}
       }
       else if (strcaselesscmp(tmp, "CARTRIDGETYPE") == 0) {
         if (cartridgetype_defined != 0) {
@@ -4654,16 +4666,13 @@ int parse_directive(void) {
   /* EMPTYFILL */
 
   if (strcaselesscmp(cp, "EMPTYFILL") == 0) {
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .EMPTYFILL.\n", ERROR_DIR);
-      return FAILED;
-    }
+    no_library_files(".EMPTYFILL");
 
     q = input_number();
 
     if (q == FAILED)
       return FAILED;
-    if (q != SUCCEEDED || d < -127 || d > 255) {
+    if (q != SUCCEEDED || d < -128 || d > 255) {
       sprintf(emsg, ".EMPTYFILL needs a 8-bit value, got %d.\n", d);
       print_error(emsg, ERROR_DIR);
       return FAILED;
@@ -5139,13 +5148,10 @@ int parse_directive(void) {
 
   if (strcaselesscmp(cp, "COMPUTECHECKSUM") == 0 || strcaselesscmp(cp, "COMPUTEGBCHECKSUM") == 0) {
 
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .COMPUTEGBCHECKSUM.\n", ERROR_DIR);
-      return FAILED;
-    }
+    no_library_files(".COMPUTEGBCHECKSUM");
     
     if (gbheader_defined != 0) {
-      print_error(".COMPUTEGBCHECKSUM unnecessary when GBHEADER is defined.\n", ERROR_WRN);
+      print_error(".COMPUTEGBCHECKSUM is unnecessary when GBHEADER is defined.\n", ERROR_WRN);
     }
 
     computechecksum_defined = 1;
@@ -5157,13 +5163,10 @@ int parse_directive(void) {
 
   if (strcaselesscmp(cp, "COMPUTEGBCOMPLEMENTCHECK") == 0 || strcaselesscmp(cp, "COMPUTECOMPLEMENTCHECK") == 0) {
 
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .COMPUTEGBCOMPLEMENTCHECK.\n", ERROR_DIR);
-      return FAILED;
-    }
+    no_library_files(".COMPUTEGBCOMPLEMENTCHECK");
     
     if (gbheader_defined != 0) {
-      print_error(".COMPUTEGBCOMPLEMENTCHECK unnecessary when GBHEADER is defined.\n", ERROR_WRN);
+      print_error(".COMPUTEGBCOMPLEMENTCHECK is unnecessary when GBHEADER is defined.\n", ERROR_WRN);
     }
 
     computecomplementcheck_defined = 1;
@@ -5177,16 +5180,14 @@ int parse_directive(void) {
 
   if (strcaselesscmp(cp, "COMPUTESNESCHECKSUM") == 0) {
 
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .COMPUTESNESCHECKSUM.\n", ERROR_DIR);
-      return FAILED;
-    }
+    no_library_files(".COMPUTESNESCHECKSUM");
+    
     if (hirom_defined == 0 && lorom_defined == 0) {
       print_error(".COMPUTESNESCHECKSUM needs either .LOROM or .HIROM.\n", ERROR_DIR);
       return FAILED;
     }
     if (snesheader_defined != 0) 
-      print_error(".COMPUTESNESCHECKSUM unnecessary when .SNESHEADER defined.\n", ERROR_WRN);
+      print_error(".COMPUTESNESCHECKSUM is unnecessary when .SNESHEADER defined.\n", ERROR_WRN);
 
     computesneschecksum_defined = 1;
 
@@ -5199,22 +5200,18 @@ int parse_directive(void) {
 
   if (strcaselesscmp(cp, "COMPUTESMSCHECKSUM") == 0) {
 
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .COMPUTESMSCHECKSUM.\n", ERROR_DIR);
-      return FAILED;
-    }
+    no_library_files(".COMPUTESMSCHECKSUM");
 
     computesmschecksum_defined++;
 
     return SUCCEEDED;
   }
 
+  /* SMSTAG */
+
   if (strcaselesscmp(cp, "SMSTAG") == 0) {
 
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .SMSTAG.\n", ERROR_DIR);
-      return FAILED;
-    }
+    no_library_files(".SMSTAG");
 
     smstag_defined++;
     computesmschecksum_defined++;
@@ -5222,6 +5219,144 @@ int parse_directive(void) {
     return SUCCEEDED;
   }
 
+  /* SMSHEADER */
+  if (strcmp(cp, "SMSHEADER") == 0) {
+    if (smsheader_defined != 0) {
+      print_error(".SMSHEADER can be defined only once.\n", ERROR_DIR);
+      return FAILED;
+    }
+
+    if (computesmschecksum_defined != 0)
+      print_error(".COMPUTESMSCHECKSUM is unnecessary when .SMSHEADER is defined.\n", ERROR_WRN);
+
+    if (smstag_defined != 0)
+      print_error(".SMSTAG is unnecessary when .SMSHEADER is defined.\n", ERROR_WRN);
+
+    if (output_format == OUTPUT_LIBRARY) {
+      print_error("Libraries don't take .SMSHEADER.\n", ERROR_DIR);
+      return FAILED;
+    }
+
+    while ((ind = get_next_token()) == SUCCEEDED) {
+      if (strcaselesscmp(tmp, ".ENDSMS") == 0)
+        break;
+      else if (strcaselesscmp(tmp, "VERSION") == 0) {
+        q = input_number();
+
+        if (q == FAILED)
+          return FAILED;
+        if (q != SUCCEEDED || d < 0 || d > 15) {
+	  sprintf(emsg, "VERSION needs a value between 0 and 15, got %d.\n", d);
+	  print_error(emsg, ERROR_DIR);
+	  return FAILED;
+        }
+
+        if (smsversion_defined != 0) {
+          if (smsversion != d) {
+            print_error("VERSION was defined for the second time.\n", ERROR_DIR);
+            return FAILED;
+          }
+        }
+
+        smsversion = d;
+        smsversion_defined = 1;
+      }
+      else if (strcaselesscmp(tmp, "REGIONCODE") == 0) {
+        q = input_number();
+
+        if (q == FAILED)
+          return FAILED;
+        if (q != SUCCEEDED || d < 3|| d > 7) {
+	  sprintf(emsg, "REGIONCODE needs a value between 3 and 7, got %d.\n", d);
+	  print_error(emsg, ERROR_DIR);
+	  return FAILED;
+        }
+
+        if (smsregioncode_defined != 0) {
+          if (smsregioncode != d) {
+            print_error("REGIONCODE was defined for the second time.\n", ERROR_DIR);
+            return FAILED;
+          }
+        }
+
+        smsregioncode = d;
+        smsregioncode_defined = 1;
+      }
+      else if (strcaselesscmp(tmp, "PRODUCTCODE") == 0) {
+        q = input_number();
+
+        if (q == FAILED)
+          return FAILED;
+        if (q != SUCCEEDED) {
+	  print_error("PRODUCTCODE needs 2.5 bytes of data.\n", ERROR_DIR);
+	  return FAILED;
+        }
+
+        smsproductcode1 = d & 255;
+        smsproductcode_defined = 1;
+
+	q = input_number();
+
+        if (q == FAILED)
+          return FAILED;
+        if (q != SUCCEEDED) {
+	  print_error("PRODUCTCODE needs 2.5 bytes of data.\n", ERROR_DIR);
+	  return FAILED;
+        }
+
+	smsproductcode2 = d & 255;
+
+	q = input_number();
+
+        if (q == FAILED)
+          return FAILED;
+        if (q != SUCCEEDED) {
+	  print_error("PRODUCTCODE needs 2.5 bytes of data.\n", ERROR_DIR);
+	  return FAILED;
+        }
+
+	smsproductcode3 = d & 15;
+      }
+      else if (strcaselesscmp(tmp, "RESERVEDSPACE") == 0) {
+        q = input_number();
+
+        if (q == FAILED)
+          return FAILED;
+        if (q != SUCCEEDED) {
+	  print_error("RESERVEDSPACE needs 2 bytes of data.\n", ERROR_DIR);
+	  return FAILED;
+        }
+
+        smsreservedspace1 = d & 255;
+        smsreservedspace_defined = 1;
+
+	q = input_number();
+
+        if (q == FAILED)
+          return FAILED;
+        if (q != SUCCEEDED) {
+	  print_error("RESERVEDSPACE needs 2 bytes of data.\n", ERROR_DIR);
+	  return FAILED;
+        }
+
+        smsreservedspace2 = d & 255;
+      }
+      else {
+        ind = FAILED;
+        break;
+      }
+    }
+
+    if (ind != SUCCEEDED) {
+      print_error("Error in .SMSHEADER data structure.\n", ERROR_DIR);
+      return FAILED;
+    }
+
+    smsheader_defined = 1;
+
+    return SUCCEEDED;
+  }
+  
   /* SDSCTAG */
 
   if (strcaselesscmp(cp, "SDSCTAG") == 0) {
@@ -5230,10 +5365,8 @@ int parse_directive(void) {
       print_error(".SDSCTAG can be defined only once.\n", ERROR_DIR);
       return FAILED;
     }
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .SDSCTAG.\n", ERROR_DIR);
-      return FAILED;
-    }
+    
+    no_library_files(".SDSCTAG");
 
     input_float_mode = ON;
     q = input_number();
@@ -5633,16 +5766,38 @@ int parse_directive(void) {
 
   if (strcaselesscmp(cp, "ROMGBC") == 0) {
 
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .ROMGBC.\n", ERROR_DIR);
+    no_library_files(".ROMGBC");
+    
+    if (romdmg != 0) {
+      print_error(".ROMDMG was defined prior to .ROMGBC.\n", ERROR_DIR);
       return FAILED;
     }
-    else if (romdmg != 0) {
-      print_error("ROMDMG was defined prior to .ROMGBC.\n", ERROR_DIR);
+    else if (romgbc == 2) {
+      print_error(".ROMGBCONLY was defined prior to .ROMGBC.\n", ERROR_DIR);
       return FAILED;
     }
 
-    romgbc++;
+    romgbc = 1;
+
+    return SUCCEEDED;
+  }
+
+  /* ROMGBCONLY */
+
+  if (strcaselesscmp(cp, "ROMGBCONLY") == 0) {
+
+    no_library_files(".ROMGBCONLY");
+
+    if (romdmg != 0) {
+      print_error(".ROMDMG was defined prior to .ROMGBCONLY.\n", ERROR_DIR);
+      return FAILED;
+    }
+    else if (romgbc == 1) {
+      print_error(".ROMGBC was defined prior to .ROMGBCONLY.\n", ERROR_DIR);
+      return FAILED;
+    }
+
+    romgbc = 2;
 
     return SUCCEEDED;
   }
@@ -5650,12 +5805,14 @@ int parse_directive(void) {
   /* ROMDMG */
 
   if (strcaselesscmp(cp, "ROMDMG") == 0) {
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .ROMDMG.\n", ERROR_DIR);
+    no_library_files(".ROMDMG");
+    
+    if (romgbc == 1) {
+      print_error(".ROMGBC was defined prior to .ROMDMG.\n", ERROR_DIR);
       return FAILED;
     }
-    else if (romgbc != 0) {
-      print_error(".ROMGBC was defined prior to .ROMDMG.\n", ERROR_DIR);
+    else if (romgbc == 2) {
+      print_error(".ROMGBCONLY was defined prior to .ROMDMG.\n", ERROR_DIR);
       return FAILED;
     }
     else if (romsgb != 0) {
@@ -5671,11 +5828,9 @@ int parse_directive(void) {
   /* ROMSGB */
 
   if (strcaselesscmp(cp, "ROMSGB") == 0) {
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .ROMSGB.\n", ERROR_DIR);
-      return FAILED;
-    }
-    else if (romdmg != 0) {
+    no_library_files(".ROMSGB");
+    
+    if (romdmg != 0) {
       print_error(".ROMDMG and .ROMSGB cannot be mixed.\n", ERROR_DIR);
       return FAILED;
     }
@@ -5863,10 +6018,7 @@ int parse_directive(void) {
   /* BASE */
 
   if (strcaselesscmp(cp, "BASE") == 0) {
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .BASE definitions.\n", ERROR_DIR);
-      return FAILED;
-    }
+    no_library_files(".BASE definitions");
 
     q = input_number();
 
@@ -5885,10 +6037,7 @@ int parse_directive(void) {
   /* SMC */
 
   if (strcaselesscmp(cp, "SMC") == 0) {
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .SMC.\n", ERROR_DIR);
-      return FAILED;
-    }
+    no_library_files(".SMC");
 
     smc_defined++;
     snes_mode++;
@@ -5899,11 +6048,9 @@ int parse_directive(void) {
   /* HIROM */
 
   if (strcaselesscmp(cp, "HIROM") == 0) {
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .HIROM.\n", ERROR_DIR);
-      return FAILED;
-    }
-    else if (lorom_defined != 0) {
+    no_library_files(".HIROM");
+    
+    if (lorom_defined != 0) {
       print_error(".LOROM was defined prior to .HIROM.\n", ERROR_DIR);
       return FAILED;
     }
@@ -5917,11 +6064,9 @@ int parse_directive(void) {
   /* LOROM */
 
   if (strcaselesscmp(cp, "LOROM") == 0) {
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .LOROM.\n", ERROR_DIR);
-      return FAILED;
-    }
-    else if (hirom_defined != 0) {
+    no_library_files(".LOROM");
+    
+    if (hirom_defined != 0) {
       print_error(".HIROM was defined prior to .LOROM.\n", ERROR_DIR);
       return FAILED;
     }
@@ -5935,11 +6080,9 @@ int parse_directive(void) {
   /* SLOWROM */
 
   if (strcaselesscmp(cp, "SLOWROM") == 0) {
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .SLOWROM.\n", ERROR_DIR);
-      return FAILED;
-    }
-    else if (fastrom_defined != 0) {
+    no_library_files(".SLOWROM");
+    
+    if (fastrom_defined != 0) {
       print_error(".FASTROM was defined prior to .SLOWROM.\n", ERROR_DIR);
       return FAILED;
     }
@@ -5953,11 +6096,9 @@ int parse_directive(void) {
   /* FASTROM */
 
   if (strcaselesscmp(cp, "FASTROM") == 0) {
-    if (output_format == OUTPUT_LIBRARY) {
-      print_error("Library files don't take .FASTROM.\n", ERROR_DIR);
-      return FAILED;
-    }
-    else if (slowrom_defined != 0) {
+    no_library_files(".FASTROM");
+    
+    if (slowrom_defined != 0) {
       print_error(".SLOWROM was defined prior to .FASTROM.\n", ERROR_DIR);
       return FAILED;
     }
@@ -5977,7 +6118,7 @@ int parse_directive(void) {
     }
 
     if (computesneschecksum_defined != 0)
-      print_error(".COMPUTESNESCHECKSUM unnecessary when .SNESHEADER is defined.\n", ERROR_WRN);
+      print_error(".COMPUTESNESCHECKSUM is unnecessary when .SNESHEADER is defined.\n", ERROR_WRN);
     else
       computesneschecksum_defined++;
 
@@ -6104,7 +6245,7 @@ int parse_directive(void) {
 
         inz = input_number();
 
-        if (inz == SUCCEEDED && (d < -127 || d > 255)) {
+        if (inz == SUCCEEDED && (d < -128 || d > 255)) {
           sprintf(emsg, "CARTRIDGETYPE expects 8-bit data, %d is out of range!\n", d);
           print_error(emsg, ERROR_DIR);
           return FAILED;
@@ -6124,7 +6265,7 @@ int parse_directive(void) {
 
         inz = input_number();
 
-        if (inz == SUCCEEDED && (d < -127 || d > 255)) {
+        if (inz == SUCCEEDED && (d < -128 || d > 255)) {
           sprintf(emsg, "ROMSIZE expects 8-bit data, %d is out of range!\n", d);
           print_error(emsg, ERROR_DIR);
           return FAILED;
@@ -6142,7 +6283,7 @@ int parse_directive(void) {
 
         inz = input_number();
 
-        if (inz == SUCCEEDED && (d < -127 || d > 255)) {
+        if (inz == SUCCEEDED && (d < -128 || d > 255)) {
           sprintf(emsg, "SRAMSIZE expects 8-bit data, %d is out of range!\n", d);
           print_error(emsg, ERROR_DIR);
           return FAILED;
@@ -6162,7 +6303,7 @@ int parse_directive(void) {
 
         inz = input_number();
 
-        if (inz == SUCCEEDED && (d < -127 || d > 255)) {
+        if (inz == SUCCEEDED && (d < -128 || d > 255)) {
           sprintf(emsg, "COUNTRY expects 8-bit data, %d is out of range!\n", d);
           print_error(emsg, ERROR_DIR);
           return FAILED;
@@ -6182,7 +6323,7 @@ int parse_directive(void) {
 
         inz = input_number();
 
-        if (inz == SUCCEEDED && (d < -127 || d > 255)) {
+        if (inz == SUCCEEDED && (d < -128 || d > 255)) {
           sprintf(emsg, "LICENSEECODE expects 8-bit data, %d is out of range!\n", d);
           print_error(emsg, ERROR_DIR);
           return FAILED;
@@ -6202,7 +6343,7 @@ int parse_directive(void) {
 
         inz = input_number();
 
-        if (inz == SUCCEEDED && (d < -127 || d > 255)) {
+        if (inz == SUCCEEDED && (d < -128 || d > 255)) {
           sprintf(emsg, "VERSION expects 8-bit data, %d is out of range!\n", d);
           print_error(emsg, ERROR_DIR);
           return FAILED;
@@ -6815,7 +6956,7 @@ int parse_directive(void) {
         fprintf(file_out_ptr, "y %d ", d);
       }
       else {
-        if (d > 255 || d < -127) {
+        if (d > 255 || d < -128) {
           sprintf(emsg, ".%s: Expected a 8-bit value, computed %d.\n", cp, d);
           print_error(emsg, ERROR_NONE);
           return FAILED;
@@ -6921,7 +7062,7 @@ int parse_directive(void) {
         fprintf(file_out_ptr, "y %d ", d);
       }
       else {
-        if (d > 255 || d < -127) {
+        if (d > 255 || d < -128) {
           sprintf(emsg, ".%s: Expected a 8-bit value, computed %d.\n", cp, d);
           print_error(emsg, ERROR_NONE);
           return FAILED;

@@ -5,7 +5,7 @@
 
 /* want to use longer strings and labels? change this */
 
-#define MAX_NAME_LENGTH 64
+#define MAX_NAME_LENGTH 255
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -417,6 +417,12 @@ struct definition {
   double value;
   int    type;
   int    size;
+};
+
+struct append_section {
+  char section[MAX_NAME_LENGTH];
+  char append_to[MAX_NAME_LENGTH];
+  struct append_section *next;
 };
 
 struct macro_argument {
